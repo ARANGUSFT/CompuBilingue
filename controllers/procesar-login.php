@@ -20,5 +20,6 @@ if ($result->num_rows === 1) {
         exit;
     }
 }
-echo "Credenciales incorrectas.";
+header("Location: ../login/login.php?error=1");
+exit;
 ?>

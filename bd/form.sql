@@ -3,7 +3,7 @@
 -- https://www.phpmyadmin.net/
 --
 -- Servidor: 127.0.0.1
--- Tiempo de generación: 02-08-2025 a las 18:29:12
+-- Tiempo de generación: 08-08-2025 a las 19:21:43
 -- Versión del servidor: 10.4.32-MariaDB
 -- Versión de PHP: 8.1.25
 
@@ -33,7 +33,6 @@ CREATE TABLE `inscripciones` (
   `nombres_estudiante` varchar(255) NOT NULL,
   `nivel_aspira` text DEFAULT NULL,
   `horario` varchar(100) DEFAULT NULL,
-  `mensualidad` decimal(10,2) DEFAULT NULL,
   `estrato_socioeconomico` int(11) DEFAULT NULL,
   `eps` varchar(100) DEFAULT NULL,
   `nivel_escolaridad` varchar(100) DEFAULT NULL,
@@ -54,14 +53,6 @@ CREATE TABLE `inscripciones` (
   `reg_type` varchar(20) DEFAULT NULL,
   `created_at` timestamp NOT NULL DEFAULT current_timestamp()
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
-
---
--- Volcado de datos para la tabla `inscripciones`
---
-
-INSERT INTO `inscripciones` (`id`, `foto`, `nombres_estudiante`, `nivel_aspira`, `horario`, `mensualidad`, `estrato_socioeconomico`, `eps`, `nivel_escolaridad`, `doc_type`, `numero_documento`, `email`, `municipio_residencia`, `direccion_residencia`, `celular1`, `celular2`, `barrio`, `nombre_acudiente`, `contacto_acudiente`, `empresa_acudiente`, `cargo_acudiente`, `contacto_empresa_acudiente`, `mensaje_bienvenida`, `reg_type`, `created_at`) VALUES
-(1, 'uploads/1754147279_Captura de pantalla 2025-02-05 112431.png', 'santiago arango', 'A1,A2,B1,B2', '3 a 4', 222.00, 5, 'sura', 'Secundaria', 'PPT', '1033455667', 'jose1243@gmail.com', 'bello', 'Stallsf 43 1212', '23232332', '33232323', 'bellavista', 'Sebastian Alejandro', '3104432794', 'Compuestudio', 'soporte', '1212212', 'dsfdfdfdfdffddf', 'new', '2025-08-02 15:07:59'),
-(2, 'uploads/1754151179_Captura de pantalla 2025-02-05 112431.png', 'santiago arango', 'B1,B2', '3 a 4', 22222.00, 2, 'sura', 'Primaria', 'CC', '1033455667', 'jose1243@gmail.com', 'bello', 'Stallsf 43 1212', '23232332', '33232323', 'bellavista', 'Jose Alejandro', '3104432794', 'Compuestudio', 'soporte', '32332332', 'dsfdfdfdfdffddf', 'new', '2025-08-02 16:12:59');
 
 -- --------------------------------------------------------
 
@@ -109,7 +100,7 @@ ALTER TABLE `usuarios`
 -- AUTO_INCREMENT de la tabla `inscripciones`
 --
 ALTER TABLE `inscripciones`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=3;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=16;
 
 --
 -- AUTO_INCREMENT de la tabla `usuarios`

@@ -1,177 +1,173 @@
 <?php
+// Iniciar sesión para CSRF token
+session_start();
+
+// Función para validar y sanitizar datos
+function validarDatos($data) {
+    $data = trim($data);
+    $data = stripslashes($data);
+    $data = htmlspecialchars($data);
+    return $data;
+}
+
+// Array para almacenar errores
+$errores = [];
+
+// Verificar token CSRF
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    if (!isset($_POST['csrf_token']) || $_POST['csrf_token'] !== $_SESSION['csrf_token']) {
+        die("Token CSRF inválido");
+    }
+}
+
+// Validación de campos obligatorios
+$camposObligatorios = [
+    'nombres_estudiante' => 'Nombres del estudiante',
+    'horario' => 'Horario',
+    'estrato_socioeconomico' => 'Estrato socioeconómico',
+    'eps' => 'EPS',
+    'nivel_escolaridad' => 'Nivel de escolaridad',
+    'doc_type' => 'Tipo de documento',
+    'numero_documento' => 'Número de documento',
+    'email' => 'Email',
+    'municipio_residencia' => 'Municipio de residencia',
+    'direccion_residencia' => 'Dirección de residencia',
+    'celular1' => 'Celular principal',
+    'nombre_acudiente' => 'Nombre del acudiente',
+    'contacto_acudiente' => 'Contacto del acudiente',
+    'reg_type' => 'Tipo de registro'
+];
+
+foreach ($camposObligatorios as $campo => $nombre) {
+    if (empty($_POST[$campo])) {
+        $errores[$campo] = "El campo $nombre es obligatorio";
+    }
+}
+
+// Validación de foto
+if (!isset($_FILES["photoUpload"]) || $_FILES["photoUpload"]["error"] != UPLOAD_ERR_OK) {
+    $errores['photoUpload'] = "Debe subir una foto";
+} else {
+    $permitidos = ['image/jpeg', 'image/png', 'image/gif'];
+    $tipoArchivo = $_FILES["photoUpload"]["type"];
+    if (!in_array($tipoArchivo, $permitidos)) {
+        $errores['photoUpload'] = "Solo se permiten imágenes JPEG, PNG o GIF";
+    }
+    
+    $tamanoMaximo = 2 * 1024 * 1024; // 2MB
+    if ($_FILES["photoUpload"]["size"] > $tamanoMaximo) {
+        $errores['photoUpload'] = "La imagen no debe superar los 2MB";
+    }
+}
+
+// Validación de email
+if (!filter_var($_POST['email'], FILTER_VALIDATE_EMAIL)) {
+    $errores['email'] = "El email no tiene un formato válido";
+}
+
+// Validación de números
+if (!preg_match('/^[0-9]{6,10}$/', $_POST['numero_documento'])) {
+    $errores['numero_documento'] = "El número de documento debe contener entre 6 y 10 dígitos";
+}
+
+if (!preg_match('/^[0-9]{10}$/', $_POST['celular1'])) {
+    $errores['celular1'] = "El celular debe tener 10 dígitos";
+}
+
+if (!empty($_POST['celular2']) && !preg_match('/^[0-9]{10}$/', $_POST['celular2'])) {
+    $errores['celular2'] = "El celular secundario debe tener 10 dígitos";
+}
+
+if (!empty($_POST['contacto_empresa_acudiente']) && !preg_match('/^[0-9]{6,12}$/', $_POST['contacto_empresa_acudiente'])) {
+    $errores['contacto_empresa_acudiente'] = "El contacto de la empresa debe contener entre 6 y 12 dígitos";
+}
+
+// Validación de nivel (checkbox)
+if (!isset($_POST['nivel']) || count($_POST['nivel']) == 0) {
+    $errores['nivel'] = "Debe seleccionar al menos un nivel";
+}
+
+if (count($errores) > 0) {
+    session_start();
+    $_SESSION['errores'] = $errores;
+    $_SESSION['old'] = $_POST;
+    header("Location: ../index.php");
+    exit;
+}
+
+
+// Si no hay errores, continuar con el procesamiento...
+
 // Conexión a la base de datos
 $conn = new mysqli("localhost", "root", "", "form");
 if ($conn->connect_error) {
     die("Conexión fallida: " . $conn->connect_error);
 }
 
-// 1. Validar método de solicitud
-if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
-    die("Método no permitido. Use POST.");
-}
-
-// 2. Función para validar y sanitizar datos
-function validarDato($dato, $patron, $mensajeError, $requerido = true) {
-    if ($requerido && empty($dato)) {
-        die("Campo requerido faltante: $mensajeError");
-    }
-    
-    if (!empty($dato) && !preg_match($patron, $dato)) {
-        die("Formato inválido: $mensajeError");
-    }
-    
-    return htmlspecialchars(trim($dato));
-}
-
-// 3. Validar archivo de foto
-if (!isset($_FILES['photoUpload']) || $_FILES['photoUpload']['error'] !== UPLOAD_ERR_OK) {
-    die("Debe subir una foto del estudiante");
-}
-
-$tiposPermitidos = ['image/jpeg', 'image/png'];
-$tipoArchivo = $_FILES['photoUpload']['type'];
-if (!in_array($tipoArchivo, $tiposPermitidos)) {
-    die("Solo se permiten imágenes JPG o PNG");
-}
-
-if ($_FILES['photoUpload']['size'] > 2 * 1024 * 1024) {
-    die("La imagen no debe exceder los 2MB");
-}
-
-// Crear directorio si no existe
+// Manejo de la foto (solo si no hay errores)
 $uploadDir = realpath(__DIR__ . '/../uploads');
 if (!is_dir($uploadDir)) {
     mkdir($uploadDir, 0755, true);
 }
-
-// Procesar foto
 $fotoNombre = time() . '_' . basename($_FILES["photoUpload"]["name"]);
 $fotoRutaCompleta = $uploadDir . '/' . $fotoNombre;
 $fotoRutaParaBD = 'uploads/' . $fotoNombre;
 
 if (!move_uploaded_file($_FILES["photoUpload"]["tmp_name"], $fotoRutaCompleta)) {
-    die("Error al subir la imagen");
+    die("Error al subir la foto");
 }
 
-// 4. Validar todos los campos del formulario
-$nombres = validarDato($_POST['nombres_estudiante'], 
-    '/^[a-zA-ZáéíóúÁÉÍÓÚñÑ\s]{10,100}$/', 
-    'Nombres inválidos (solo letras, 10-100 caracteres)');
+// Sanitizar y recolectar datos del formulario
+$nombres = validarDatos($_POST['nombres_estudiante']);
+$nivel = isset($_POST['nivel']) ? implode(",", array_map('validarDatos', $_POST['nivel'])) : '';
+$horario = validarDatos($_POST['horario']);
+$estrato = validarDatos($_POST['estrato_socioeconomico']);
+$eps = validarDatos($_POST['eps']);
+$escolaridad = validarDatos($_POST['nivel_escolaridad']);
+$doc_type = validarDatos($_POST['doc_type']);
+$numero_documento = validarDatos($_POST['numero_documento']);
+$email = validarDatos($_POST['email']);
+$municipio = validarDatos($_POST['municipio_residencia']);
+$direccion = validarDatos($_POST['direccion_residencia']);
+$celular1 = validarDatos($_POST['celular1']);
+$celular2 = validarDatos($_POST['celular2']);
+$barrio = validarDatos($_POST['barrio']);
+$nombre_acudiente = validarDatos($_POST['nombre_acudiente']);
+$contacto_acudiente = validarDatos($_POST['contacto_acudiente']);
+$empresa = validarDatos($_POST['empresa_acudiente']);
+$cargo = validarDatos($_POST['cargo_acudiente']);
+$contacto_empresa = validarDatos($_POST['contacto_empresa_acudiente']);
+$mensaje = validarDatos($_POST['mensaje_bienvenida']);
+$reg_type = validarDatos($_POST['reg_type']);
 
-// Validar niveles (checkbox)
-if (!isset($_POST['nivel']) || count($_POST['nivel']) === 0) {
-    die("Debe seleccionar al menos un nivel de aspiración");
-}
-$nivel = implode(",", $_POST['nivel']);
-
-$horario = validarDato($_POST['horario'], 
-    '/^[a-zA-Z0-9\s-]{3,50}$/', 
-    'Horario inválido (3-50 caracteres alfanuméricos)');
-
-$mensualidad = validarDato($_POST['mensualidad'], 
-    '/^\d+(\.\d{1,2})?$/', 
-    'Mensualidad inválida (solo números con hasta 2 decimales)');
-
-$estrato = validarDato($_POST['estrato_socioeconomico'], 
-    '/^[1-6]$/', 
-    'Estrato inválido (1-6)');
-
-$eps = validarDato($_POST['eps'], 
-    '/^[a-zA-Z0-9áéíóúÁÉÍÓÚñÑ\s-]{3,50}$/', 
-    'EPS/SISBEN inválido (3-50 caracteres)');
-
-$escolaridad = validarDato($_POST['nivel_escolaridad'], 
-    '/^(Primaria|Secundaria|Técnico|Tecnológico|Universitario|Postgrado)$/', 
-    'Nivel de escolaridad inválido');
-
-$doc_type = validarDato($_POST['doc_type'], 
-    '/^(CC|TI|PPT)$/', 
-    'Tipo de documento inválido');
-
-$numero_documento = validarDato($_POST['numero_documento'], 
-    '/^\d{8,15}$/', 
-    'Número de documento inválido (8-15 dígitos)');
-
-$email = filter_var($_POST['email'], FILTER_VALIDATE_EMAIL);
-if (!$email) {
-    die("Email inválido");
-}
-
-$municipio = validarDato($_POST['municipio_residencia'], 
-    '/^[a-zA-ZáéíóúÁÉÍÓÚñÑ\s]{3,50}$/', 
-    'Municipio inválido (3-50 letras)');
-
-$direccion = validarDato($_POST['direccion_residencia'], 
-    '/^[a-zA-Z0-9áéíóúÁÉÍÓÚñÑ\s#-]{5,100}$/', 
-    'Dirección inválida (5-100 caracteres)');
-
-$celular1 = validarDato($_POST['celular1'], 
-    '/^[0-9+\s]{7,15}$/', 
-    'Teléfono principal inválido (7-15 dígitos)');
-
-$celular2 = isset($_POST['celular2']) ? validarDato($_POST['celular2'], 
-    '/^[0-9+\s]{7,15}$|^$/', 
-    'Teléfono secundario inválido (7-15 dígitos)', false) : '';
-
-$barrio = validarDato($_POST['barrio'], 
-    '/^[a-zA-Z0-9áéíóúÁÉÍÓÚñÑ\s-]{3,50}$/', 
-    'Barrio inválido (3-50 caracteres)');
-
-$nombre_acudiente = validarDato($_POST['nombre_acudiente'], 
-    '/^[a-zA-ZáéíóúÁÉÍÓÚñÑ\s]{10,100}$/', 
-    'Nombre acudiente inválido (10-100 letras)');
-
-$contacto_acudiente = validarDato($_POST['contacto_acudiente'], 
-    '/^[0-9+\s]{7,15}$/', 
-    'Contacto acudiente inválido (7-15 dígitos)');
-
-$empresa = isset($_POST['empresa_acudiente']) ? validarDato($_POST['empresa_acudiente'], 
-    '/^[a-zA-Z0-9áéíóúÁÉÍÓÚñÑ\s&.,-]{3,100}$|^$/', 
-    'Empresa inválida (3-100 caracteres)', false) : '';
-
-$cargo = isset($_POST['cargo_acudiente']) ? validarDato($_POST['cargo_acudiente'], 
-    '/^[a-zA-ZáéíóúÁÉÍÓÚñÑ\s-]{3,50}$|^$/', 
-    'Cargo inválido (3-50 letras)', false) : '';
-
-$contacto_empresa = isset($_POST['contacto_empresa_acudiente']) ? validarDato($_POST['contacto_empresa_acudiente'], 
-    '/^[0-9+\s]{7,15}$|^$/', 
-    'Contacto empresa inválido (7-15 dígitos)', false) : '';
-
-$mensaje = isset($_POST['mensaje_bienvenida']) ? validarDato($_POST['mensaje_bienvenida'], 
-    '/^.{0,200}$/', 
-    'Mensaje demasiado largo (máx 200 caracteres)', false) : '';
-
-$reg_type = validarDato($_POST['reg_type'], 
-    '/^(new|returning)$/', 
-    'Tipo de inscripción inválido');
-
-// 5. Preparar y ejecutar la consulta SQL
+// Preparar consulta SQL con sentencias preparadas
 $stmt = $conn->prepare("INSERT INTO inscripciones (
-    foto, nombres_estudiante, nivel_aspira, horario, mensualidad, estrato_socioeconomico,
+    foto, nombres_estudiante, nivel_aspira, horario, estrato_socioeconomico,
     eps, nivel_escolaridad, doc_type, numero_documento, email, municipio_residencia,
     direccion_residencia, celular1, celular2, barrio, nombre_acudiente, contacto_acudiente,
     empresa_acudiente, cargo_acudiente, contacto_empresa_acudiente, mensaje_bienvenida, reg_type
-) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
 
 if (!$stmt) {
-    die("Error al preparar la consulta: " . $conn->error);
+    die("Error en la preparación: " . $conn->error);
 }
 
-$stmt->bind_param("sssssdsssssssssssssssss",
-    $fotoRutaParaBD, $nombres, $nivel, $horario, $mensualidad, $estrato,
+// Bind parameters
+$stmt->bind_param("sssssdssssssssssssssss",
+    $fotoRutaParaBD, $nombres, $nivel, $horario, $estrato,
     $eps, $escolaridad, $doc_type, $numero_documento, $email, $municipio,
     $direccion, $celular1, $celular2, $barrio, $nombre_acudiente, $contacto_acudiente,
     $empresa, $cargo, $contacto_empresa, $mensaje, $reg_type
 );
 
-// 6. Ejecutar y manejar resultados
+// Ejecutar consulta
 if ($stmt->execute()) {
+    // Regenerar token CSRF para el próximo formulario
+    $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
     header("Location: ../exitosa.php");
     exit;
 } else {
-    // Manejo de errores SQL sin mostrar detalles sensibles
-    error_log("Error en la base de datos: " . $stmt->error);
-    die("Ocurrió un error al procesar tu inscripción. Por favor intenta nuevamente.");
+    echo "Error: " . $stmt->error;
 }
 
 $stmt->close();

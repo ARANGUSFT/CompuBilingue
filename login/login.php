@@ -135,5 +135,18 @@
             </div>
         </form>
     </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <?php if (isset($_GET['error']) && $_GET['error'] == 1): ?>
+    <script>
+    Swal.fire({
+        icon: 'error',
+        title: 'Credenciales incorrectas',
+        text: 'El usuario o la contraseña no son válidos',
+        confirmButtonText: 'Intentar de nuevo'
+    });
+    </script>
+    <?php endif; ?>
+
 </body>
 </html>

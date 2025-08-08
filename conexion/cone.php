@@ -2,7 +2,7 @@
 $host = 'localhost';       // Cambia si usas otro host
 $user = 'root';            // Tu usuario de MySQL
 $pass = '';                // Tu contraseña de MySQL
-$dbname = 'incripcion'; // Nombre de la base de datos
+$dbname = 'form'; // Nombre de la base de datos
 
 $conn = new mysqli($host, $user, $pass, $dbname);
 
