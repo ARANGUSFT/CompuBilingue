@@ -130,9 +130,7 @@
             
             <button type="submit">Acceder</button>
             
-            <div class="forgot-password">
-                <a href="#">¿Olvidó su contraseña?</a>
-            </div>
+         
         </form>
     </div>
 

@@ -1,9 +1,13 @@
 <?php
+// Iniciar sesión para CSRF token
 session_start();
 
 // Función para validar y sanitizar datos
 function validarDatos($data) {
-    return htmlspecialchars(stripslashes(trim($data)));
+    $data = trim($data);
+    $data = stripslashes($data);
+    $data = htmlspecialchars($data);
+    return $data;
 }
 
 // Array para almacenar errores
@@ -16,13 +20,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 }
 
-// Validar ID
+// Validar que exista el ID
 if (!isset($_POST['id']) || !is_numeric($_POST['id'])) {
     die("ID de inscripción inválido");
 }
 $id = (int)$_POST['id'];
 
-// Validar campos obligatorios
+// Validación de campos obligatorios
 $camposObligatorios = [
     'nombres_estudiante' => 'Nombres del estudiante',
     'horario' => 'Horario',
@@ -30,7 +34,7 @@ $camposObligatorios = [
     'numero_documento' => 'Número de documento',
     'email' => 'Email',
     'celular1' => 'Celular principal',
-    'reg_type' => 'Tipo de registro'
+    'reg_type' => 'Tipo de registro',
 ];
 
 foreach ($camposObligatorios as $campo => $nombre) {
@@ -39,70 +43,51 @@ foreach ($camposObligatorios as $campo => $nombre) {
     }
 }
 
-// Validar nivel_aspira como arreglo
-if (empty($_POST['nivel_aspira']) || !is_array($_POST['nivel_aspira'])) {
-    $errores['nivel_aspira'] = "Debes seleccionar al menos un nivel";
-}
-
-// Validar formato del email
-if (!filter_var($_POST['email'], FILTER_VALIDATE_EMAIL)) {
-    $errores['email'] = "El email no tiene un formato válido";
-}
-
-// Validar documento
-if (!preg_match('/^[0-9]{6,10}$/', $_POST['numero_documento'])) {
-    $errores['numero_documento'] = "El número de documento debe contener entre 6 y 10 dígitos";
-}
-
-// Validar celular1
-if (!preg_match('/^[0-9]{10}$/', $_POST['celular1'])) {
-    $errores['celular1'] = "El celular debe tener 10 dígitos";
-}
-
-// Validar celular2 si se ingresó
-if (!empty($_POST['celular2']) && !preg_match('/^[0-9]{10}$/', $_POST['celular2'])) {
-    $errores['celular2'] = "El celular secundario debe tener 10 dígitos";
-}
-
-// Validar imagen (opcional)
+// Validación de foto (opcional en edición)
 if (isset($_FILES["foto"]) && $_FILES["foto"]["error"] == UPLOAD_ERR_OK) {
     $permitidos = ['image/jpeg', 'image/png', 'image/gif'];
-    if (!in_array($_FILES["foto"]["type"], $permitidos)) {
+    $tipoArchivo = $_FILES["foto"]["type"];
+    if (!in_array($tipoArchivo, $permitidos)) {
         $errores['foto'] = "Solo se permiten imágenes JPEG, PNG o GIF";
     }
-
-    if ($_FILES["foto"]["size"] > 2 * 1024 * 1024) {
+    
+    $tamanoMaximo = 2 * 1024 * 1024; // 2MB
+    if ($_FILES["foto"]["size"] > $tamanoMaximo) {
         $errores['foto'] = "La imagen no debe superar los 2MB";
     }
 }
 
-// Si hay errores, redirigimos y guardamos los valores anteriores
+// Validación de email
+if (!filter_var($_POST['email'], FILTER_VALIDATE_EMAIL)) {
+    $errores['email'] = "El email no tiene un formato válido";
+}
+
+// Validación de números
+if (!preg_match('/^[0-9]{6,10}$/', $_POST['numero_documento'])) {
+    $errores['numero_documento'] = "El número de documento debe contener entre 6 y 10 dígitos";
+}
+
+if (!preg_match('/^[0-9]{10}$/', $_POST['celular1'])) {
+    $errores['celular1'] = "El celular debe tener 10 dígitos";
+}
+
+if (!empty($_POST['celular2']) && !preg_match('/^[0-9]{10}$/', $_POST['celular2'])) {
+    $errores['celular2'] = "El celular secundario debe tener 10 dígitos";
+}
+
 if (count($errores) > 0) {
     $_SESSION['errores_edicion'] = $errores;
-    $_SESSION['old_edicion'] = [
-        'id' => $_POST['id'],
-        'nombres_estudiante' => $_POST['nombres_estudiante'] ?? '',
-        'nivel_aspira'       => $_POST['nivel_aspira'] ?? [],
-        'horario'            => $_POST['horario'] ?? '',
-        'doc_type'           => $_POST['doc_type'] ?? '',
-        'numero_documento'   => $_POST['numero_documento'] ?? '',
-        'email'              => $_POST['email'] ?? '',
-        'celular1'           => $_POST['celular1'] ?? '',
-        'celular2'           => $_POST['celular2'] ?? '',
-        'reg_type'           => $_POST['reg_type'] ?? '',
-        'created_at'         => $_POST['created_at'] ?? ''
-    ];
-    header("Location: dashboard.php?editar=$id");
+    header("Location: listado.php?editar=$id");
     exit;
 }
 
-// Conexión
+// Conexión a la base de datos
 $conn = new mysqli("localhost", "root", "", "form");
 if ($conn->connect_error) {
     die("Conexión fallida: " . $conn->connect_error);
 }
 
-// Obtener foto anterior
+// Obtener datos actuales para comparar y manejar la foto
 $sqlActual = "SELECT foto FROM inscripciones WHERE id = ?";
 $stmtActual = $conn->prepare($sqlActual);
 $stmtActual->bind_param("i", $id);
@@ -111,23 +96,23 @@ $resultadoActual = $stmtActual->get_result();
 $filaActual = $resultadoActual->fetch_assoc();
 $stmtActual->close();
 
-$fotoRutaParaBD = $filaActual['foto'];
+$fotoRutaParaBD = $filaActual['foto']; // Mantener la misma foto por defecto
 
-// Manejo de nueva foto
+// Manejo de la foto (solo si se subió una nueva)
 if (isset($_FILES["foto"]) && $_FILES["foto"]["error"] == UPLOAD_ERR_OK) {
-    $uploadDir = __DIR__ . '/uploads';
+    $uploadDir = realpath(__DIR__ . '/uploads');
     if (!is_dir($uploadDir)) {
         mkdir($uploadDir, 0755, true);
     }
-
-    // Eliminar anterior si existe
+    
+    // Eliminar foto anterior si existe
     if (!empty($filaActual['foto'])) {
-        $fotoAnterior = __DIR__ . '/' . $filaActual['foto'];
+        $fotoAnterior = realpath(__DIR__ . '/../' . $filaActual['foto']);
         if (file_exists($fotoAnterior)) {
             unlink($fotoAnterior);
         }
     }
-
+    
     $fotoNombre = time() . '_' . basename($_FILES["foto"]["name"]);
     $fotoRutaCompleta = $uploadDir . '/' . $fotoNombre;
     $fotoRutaParaBD = 'uploads/' . $fotoNombre;
@@ -137,9 +122,8 @@ if (isset($_FILES["foto"]) && $_FILES["foto"]["error"] == UPLOAD_ERR_OK) {
     }
 }
 
-// Recolectar y limpiar
+// Sanitizar y recolectar datos del formulario
 $nombres = validarDatos($_POST['nombres_estudiante']);
-$nivel = isset($_POST['nivel_aspira']) ? implode(',', array_map('validarDatos', $_POST['nivel_aspira'])) : '';
 $horario = validarDatos($_POST['horario']);
 $doc_type = validarDatos($_POST['doc_type']);
 $numero_documento = validarDatos($_POST['numero_documento']);
@@ -149,10 +133,18 @@ $celular2 = validarDatos($_POST['celular2']);
 $reg_type = validarDatos($_POST['reg_type']);
 $created_at = validarDatos($_POST['created_at']);
 
-// Actualizar datos
+// Preparar consulta SQL con sentencias preparadas
 $sql = "UPDATE inscripciones SET 
-    foto = ?, nombres_estudiante = ?, nivel_aspira = ?, horario = ?, doc_type = ?,
-    numero_documento = ?, email = ?, celular1 = ?, celular2 = ?, reg_type = ?, created_at = ?
+    foto = ?,
+    nombres_estudiante = ?,
+    horario = ?,
+    doc_type = ?,
+    numero_documento = ?,
+    email = ?,
+    celular1 = ?,
+    celular2 = ?,
+    reg_type = ?,
+    created_at = ?
 WHERE id = ?";
 
 $stmt = $conn->prepare($sql);
@@ -160,10 +152,10 @@ if (!$stmt) {
     die("Error en la preparación: " . $conn->error);
 }
 
-$stmt->bind_param("sssssssssssi",
+// Bind parameters
+$stmt->bind_param("ssssssssssi",
     $fotoRutaParaBD,
     $nombres,
-    $nivel,
     $horario,
     $doc_type,
     $numero_documento,
@@ -175,13 +167,17 @@ $stmt->bind_param("sssssssssssi",
     $id
 );
 
+// Ejecutar consulta
 if ($stmt->execute()) {
+    // Regenerar token CSRF para el próximo formulario
     $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
-    unset($_SESSION['old_edicion']);
+    
+    // Redireccionar con mensaje de éxito
     $_SESSION['mensaje_exito'] = "Los cambios se guardaron correctamente";
     header("Location: dashboard.php");
     exit;
 } else {
+    // Manejar error
     $_SESSION['error_edicion'] = "Error al actualizar: " . $stmt->error;
     header("Location: dashboard.php?editar=$id");
     exit;
